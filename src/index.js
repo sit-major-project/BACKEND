@@ -16,7 +16,7 @@ import { SERVER_PORT, API_PREFIX, ALLOWED_ORIGINS } from "./config.js";
 // ────────────────────────────────────────────────────────────────────────────
 const app = express();
 
-app.use(cors({ origin: ALLOWED_ORIGINS }));
+app.use(cors({ origin: "*" }));
 app.use(express.json()); // built-in body parser
 
 // (Optional) Mount the measurementRouter at /api/v1/…
@@ -235,6 +235,7 @@ io.on("connection", (socket) => {
             chatWithGemini(prompt)
                 .then((geminiResponse) => {
                     // geminiResponse should be { role, text } or similar
+                    console.log("🤖 Gemini chat response:", geminiResponse);
                     io.to(`jobUpdates/${jobID}`).emit("jobUpdate", {
                         action: "chatReply",
                         jobID,
