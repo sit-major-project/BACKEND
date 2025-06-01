@@ -6,8 +6,11 @@ import cors from "cors";
 import jobStore from "./jobs.js";
 import mqttClient from "./mqttClient.js";
 import { setupWebSocket, getIO } from "./websocket.js";
-import { callGemini, chatWithGemini } from "./gemini.js";
+import { analyzeWithGemini, chatWithGemini } from "./gemini.js"; // <— real calls
 import measurementRouter from "./routes/measurement.js";
+import { config } from "dotenv";
+
+config();
 
 import { SERVER_PORT, API_PREFIX, ALLOWED_ORIGINS } from "./config.js";
 
@@ -79,21 +82,16 @@ mqttClient.on("message", (topic, messageBuffer) => {
 
     // 3d) Build a prompt for Gemini (replace with your real prompt builder)
     const { treeID, sensorData } = jobStore.get(jobID);
-    const prompt = `
-    Tree ID: ${treeID}
-    New NPK reading: N = ${sensorData.N}, P = ${sensorData.P}, K = ${sensorData.K}
-    Based on optimal coconut palm values, recommend nutrient adjustments and any disease risks in JSON format.
-  `;
 
-    callGemini(prompt)
+    analyzeWithGemini(treeID, sensorData)
         .then((geminiJson) => {
-            // 3e) Update job → analysisDone
+            // 5) Update job → analysisDone
             jobStore.update(jobID, {
                 status: "analysisDone",
                 analysis: geminiJson,
             });
 
-            // 3f) Broadcast WS “analysisDone”
+            // 6) Broadcast WS “analysisDone”
             io.to(`jobUpdates/${jobID}`).emit("jobUpdate", {
                 action: "analysisDone",
                 jobID,
@@ -101,10 +99,8 @@ mqttClient.on("message", (topic, messageBuffer) => {
             });
         })
         .catch((err) => {
-            console.error("❌ Gemini call failed:", err.message);
-
+            console.error("❌ Gemini analysis failed:", err.message);
             jobStore.update(jobID, { status: "failed", error: err.message });
-
             io.to(`jobUpdates/${jobID}`).emit("jobUpdate", {
                 action: "analysisFailed",
                 jobID,
@@ -112,7 +108,6 @@ mqttClient.on("message", (topic, messageBuffer) => {
             });
         });
 });
-
 // ────────────────────────────────────────────────────────────────────────────
 // 4) Handle WebSocket “command” messages from clients
 //    (e.g. { action: "startMeasurement", treeID: "coconut-tree-23" })
